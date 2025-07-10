@@ -1,0 +1,32 @@
+{
+  "sampleArticle": {
+    "title": "How to Build Scalable Applications",
+    "description": "A comprehensive guide to building applications that can handle growth",
+    "body": "# Introduction\n\nBuilding scalable applications is crucial for modern web development. In this article, we'll explore the key principles and patterns that enable applications to grow with user demand.\n\n## Key Principles\n\n1. **Modular Architecture**: Break your application into smaller, manageable pieces\n2. **Efficient Data Management**: Use appropriate data structures and caching strategies\n3. **Performance Optimization**: Monitor and optimize critical paths\n\n## Conclusion\n\nScalability should be considered from the beginning of your project.",
+    "tagList": ["programming", "scalability", "architecture", "webdev"]
+  },
+  "shortArticle": {
+    "title": "Quick Testing Tips",
+    "description": "Essential testing tips for developers",
+    "body": "Testing is essential for maintaining code quality. Here are some quick tips:\n\n- Write tests first (TDD)\n- Keep tests simple and focused\n- Use descriptive test names\n- Test edge cases\n\nHappy testing!",
+    "tagList": ["testing", "tips", "development"]
+  },
+  "markdownArticle": {
+    "title": "Markdown Guide for Developers",
+    "description": "Complete guide to using Markdown effectively",
+    "body": "# Markdown Basics\n\n## Headers\nUse `#` for headers of different levels.\n\n## Lists\n\n### Unordered Lists\n- Item 1\n- Item 2\n- Item 3\n\n### Ordered Lists\n1. First item\n2. Second item\n3. Third item\n\n## Code\n\n### Inline Code\nUse `backticks` for inline code.\n\n### Code Blocks\n```javascript\nfunction hello() {\n  console.log('Hello, World!');\n}\n```\n\n## Links and Images\n\n[Link example](https://example.com)\n\n![Image example](https://via.placeholder.com/150)\n\n## Emphasis\n\n*Italic text* and **bold text**\n\n> This is a blockquote\n\n## Tables\n\n| Feature | Description |\n|---------|-------------|\n| Headers | Use `#` symbols |\n| Lists   | Use `-` or numbers |\n| Code    | Use backticks |\n\nThat's the basics of Markdown!",
+    "tagList": ["markdown", "documentation", "writing", "guide"]
+  },
+  "editedArticle": {
+    "title": "Updated Article Title",
+    "description": "This article has been updated",
+    "body": "This is the updated content of the article.\n\n## New Section\n\nThis section was added during the edit.",
+    "tagList": ["updated", "edited", "testing"]
+  },
+  "invalidArticle": {
+    "title": "",
+    "description": "",
+    "body": "",
+    "tagList": []
+  }
+}

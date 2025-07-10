@@ -1,0 +1,27 @@
+{
+  "validUser": {
+    "username": "testuser",
+    "email": "testuser@example.com",
+    "password": "testpassword123",
+    "bio": "Test user bio",
+    "image": "https://api.dicebear.com/7.x/avataaars/svg?seed=testuser"
+  },
+  "secondUser": {
+    "username": "seconduser",
+    "email": "seconduser@example.com", 
+    "password": "testpassword123",
+    "bio": "Second test user bio",
+    "image": "https://api.dicebear.com/7.x/avataaars/svg?seed=seconduser"
+  },
+  "invalidUser": {
+    "username": "",
+    "email": "invalid-email",
+    "password": "123"
+  },
+  "updateProfile": {
+    "username": "updateduser",
+    "bio": "Updated bio for testing",
+    "email": "updated@example.com",
+    "image": "https://api.dicebear.com/7.x/avataaars/svg?seed=updated"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "validComment": {
+    "body": "This is a great article! Thank you for sharing these insights."
+  },
+  "longComment": {
+    "body": "This is a much longer comment that provides detailed feedback on the article. I particularly appreciate the sections on scalability and architecture. The examples provided are very helpful and I think other developers will find this content valuable. I've implemented similar patterns in my own projects and can confirm that they work well in practice. Looking forward to reading more articles like this one!"
+  },
+  "shortComment": {
+    "body": "Great post!"
+  },
+  "questionComment": {
+    "body": "Thanks for the article! I have a question about the scalability patterns you mentioned. Could you provide more details about implementation?"
+  },
+  "criticalComment": {
+    "body": "While I appreciate the effort put into this article, I think there are some points that could be improved. The section on performance optimization could use more concrete examples."
+  },
+  "technicalComment": {
+    "body": "Excellent article! For anyone interested in diving deeper, I'd recommend checking out the microservices architecture patterns. They complement the scalability principles mentioned here. Also, consider using Redis for caching and database sharding for large-scale applications."
+  },
+  "emptyComment": {
+    "body": ""
+  }
+}
