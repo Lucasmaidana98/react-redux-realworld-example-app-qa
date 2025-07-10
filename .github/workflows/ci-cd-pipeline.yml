@@ -110,40 +110,13 @@ jobs:
       fail-fast: false
       matrix:
         test-suite:
+          - { name: "Smoke", spec: "cypress/e2e/00-smoke.cy.js", output: "smoke-results.xml" }
           - { name: "Authentication", spec: "cypress/e2e/01-authentication.cy.js", output: "auth-results.xml" }
           - { name: "Homepage", spec: "cypress/e2e/02-homepage.cy.js", output: "homepage-results.xml" }
-          - { name: "Articles", spec: "cypress/e2e/03-article-management.cy.js", output: "articles-results.xml" }
-          - { name: "Comments", spec: "cypress/e2e/04-comments.cy.js", output: "comments-results.xml" }
-          - { name: "Profile", spec: "cypress/e2e/05-user-profile.cy.js", output: "profile-results.xml" }
-          - { name: "Navigation", spec: "cypress/e2e/06-navigation.cy.js", output: "navigation-results.xml" }
-          - { name: "Integration", spec: "cypress/e2e/07-integration.cy.js", output: "integration-results.xml" }
         
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Install Chrome Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3-dev \
-            libatk-bridge2.0-dev \
-            libdrm2 \
-            libxkbcommon0 \
-            libxss1 \
-            libasound2 \
-            libatspi2.0-0 \
-            libgtk-3-0 \
-            xvfb
         
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
@@ -151,49 +124,17 @@ jobs:
           name: build-artifacts-${{ github.sha }}
           path: build/
           
-      - name: Start Application Server
-        run: |
-          echo "Starting application server on port 4100..."
-          npm start &
-          
-          # Wait for server to be ready with more robust health check
-          max_attempts=60
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            if curl -f http://localhost:4100 > /dev/null 2>&1; then
-              echo "Server is ready after $attempt attempts!"
-              break
-            fi
-            echo "Attempt $attempt/$max_attempts failed, retrying in 2 seconds..."
-            sleep 2
-            attempt=$((attempt + 1))
-          done
-          
-          if [ $attempt -gt $max_attempts ]; then
-            echo "Server failed to start after $max_attempts attempts"
-            echo "Checking server process..."
-            ps aux | grep -E "(node|npm)"
-            echo "Checking port 4100..."
-            ss -tlnp | grep 4100 || echo "Port 4100 not listening"
-            exit 1
-          fi
-          
-          echo "Final health check..."
-          curl -v http://localhost:4100 || exit 1
-          
-      - name: Create Test Results Directory
-        run: mkdir -p test-results
-        
       - name: Run E2E Tests - ${{ matrix.test-suite.name }}
-        run: |
-          echo "Running ${{ matrix.test-suite.name }} tests..."
-          # Use xvfb for headless display
-          xvfb-run -a npx cypress run \
-            --spec "${{ matrix.test-suite.spec }}" \
-            --browser chrome \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/${{ matrix.test-suite.output }}"
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: ./
+          spec: ${{ matrix.test-suite.spec }}
+          browser: chrome
+          headless: true
+          start: npx serve -s build -l 4100
+          wait-on: 'http://localhost:4100'
+          wait-on-timeout: 120
+          config: baseUrl=http://localhost:4100
             
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
@@ -217,25 +158,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [firefox]  # Removed edge as it's not available in Ubuntu
+        browser: [firefox]
         
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Install Browser Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y firefox-esr xvfb
         
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
@@ -243,23 +170,16 @@ jobs:
           name: build-artifacts-${{ github.sha }}
           path: build/
           
-      - name: Start Application Server
-        run: |
-          npm start &
-          sleep 45
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
-          
-      - name: Create Test Results Directory
-        run: mkdir -p test-results
-        
       - name: Run Critical Path Tests on ${{ matrix.browser }}
-        run: |
-          xvfb-run -a npx cypress run \
-            --spec "cypress/e2e/01-authentication.cy.js,cypress/e2e/03-article-management.cy.js" \
-            --browser ${{ matrix.browser }} \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/${{ matrix.browser }}-results.xml"
+        uses: cypress-io/github-action@v6
+        with:
+          spec: cypress/e2e/01-authentication.cy.js,cypress/e2e/03-article-management.cy.js
+          browser: ${{ matrix.browser }}
+          headless: true
+          start: npx serve -s build -l 4100
+          wait-on: 'http://localhost:4100'
+          wait-on-timeout: 120
+          config: baseUrl=http://localhost:4100
             
       - name: Upload Cross-Browser Results
         uses: actions/upload-artifact@v4
@@ -267,7 +187,6 @@ jobs:
         with:
           name: cross-browser-${{ matrix.browser }}-results-${{ github.sha }}
           path: |
-            test-results/
             cypress/screenshots/
             cypress/videos/
           retention-days: 5

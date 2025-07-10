@@ -19,6 +19,10 @@ describe('Authentication Flow', () => {
     cy.intercept('POST', '**/users/login').as('loginRequest');
     cy.intercept('POST', '**/users').as('registerRequest');
     cy.intercept('GET', '**/user').as('getCurrentUser');
+    
+    // Visit home page to ensure app is loaded
+    cy.visit('/');
+    cy.get('body').should('be.visible');
   });
 
   describe('User Registration', () => {

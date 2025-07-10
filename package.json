@@ -5,7 +5,8 @@
   "devDependencies": {
     "cross-env": "^5.1.4",
     "cypress": "^14.5.1",
-    "react-scripts": "1.1.1"
+    "react-scripts": "1.1.1",
+    "serve": "^14.2.1"
   },
   "dependencies": {
     "history": "^4.6.3",
