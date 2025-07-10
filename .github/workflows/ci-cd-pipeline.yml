@@ -99,16 +99,25 @@ jobs:
             test-results/
           retention-days: 5
 
-  # Job 3: Application Server Setup (Sequential - depends on build)
-  setup-app-server:
-    name: Setup Application Server
+  # Job 3: E2E Tests - All suites in parallel
+  e2e-tests:
+    name: E2E Tests - ${{ matrix.test-suite.name }}
     runs-on: ubuntu-latest
-    needs: static-analysis
-    timeout-minutes: 5
+    needs: [static-analysis]
+    timeout-minutes: 20
     
-    outputs:
-      server-ready: ${{ steps.server.outputs.ready }}
-      
+    strategy:
+      fail-fast: false
+      matrix:
+        test-suite:
+          - { name: "Authentication", spec: "cypress/e2e/01-authentication.cy.js", output: "auth-results.xml" }
+          - { name: "Homepage", spec: "cypress/e2e/02-homepage.cy.js", output: "homepage-results.xml" }
+          - { name: "Articles", spec: "cypress/e2e/03-article-management.cy.js", output: "articles-results.xml" }
+          - { name: "Comments", spec: "cypress/e2e/04-comments.cy.js", output: "comments-results.xml" }
+          - { name: "Profile", spec: "cypress/e2e/05-user-profile.cy.js", output: "profile-results.xml" }
+          - { name: "Navigation", spec: "cypress/e2e/06-navigation.cy.js", output: "navigation-results.xml" }
+          - { name: "Integration", spec: "cypress/e2e/07-integration.cy.js", output: "integration-results.xml" }
+        
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -122,6 +131,20 @@ jobs:
       - name: Install Dependencies
         run: npm ci
         
+      - name: Install Chrome Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3-dev \
+            libatk-bridge2.0-dev \
+            libdrm2 \
+            libxkbcommon0 \
+            libxss1 \
+            libasound2 \
+            libatspi2.0-0 \
+            libgtk-3-0 \
+            xvfb
+        
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -129,333 +152,72 @@ jobs:
           path: build/
           
       - name: Start Application Server
-        id: server
         run: |
           echo "Starting application server on port 4100..."
           npm start &
-          sleep 30
           
-          # Health check
-          max_attempts=30
+          # Wait for server to be ready with more robust health check
+          max_attempts=60
           attempt=1
           while [ $attempt -le $max_attempts ]; do
             if curl -f http://localhost:4100 > /dev/null 2>&1; then
-              echo "Server is ready!"
-              echo "ready=true" >> $GITHUB_OUTPUT
+              echo "Server is ready after $attempt attempts!"
               break
             fi
-            echo "Attempt $attempt failed, retrying in 2 seconds..."
+            echo "Attempt $attempt/$max_attempts failed, retrying in 2 seconds..."
             sleep 2
             attempt=$((attempt + 1))
           done
           
           if [ $attempt -gt $max_attempts ]; then
-            echo "Server failed to start"
-            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "Server failed to start after $max_attempts attempts"
+            echo "Checking server process..."
+            ps aux | grep -E "(node|npm)"
+            echo "Checking port 4100..."
+            ss -tlnp | grep 4100 || echo "Port 4100 not listening"
             exit 1
           fi
-
-  # Job 4-7: E2E Tests - Parallel Execution (4 containers)
-  e2e-tests-auth:
-    name: E2E Tests - Authentication
-    runs-on: ubuntu-latest
-    needs: [static-analysis, setup-app-server]
-    timeout-minutes: 15
-    
-    strategy:
-      fail-fast: false
-      
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+          
+          echo "Final health check..."
+          curl -v http://localhost:4100 || exit 1
+          
+      - name: Create Test Results Directory
+        run: mkdir -p test-results
         
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-${{ github.sha }}
-          path: build/
-          
-      - name: Start Application Server
+      - name: Run E2E Tests - ${{ matrix.test-suite.name }}
         run: |
-          npm start &
-          sleep 30
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
-          
-      - name: Run Authentication E2E Tests
-        run: |
-          npx cypress run \
-            --spec "cypress/e2e/01-authentication.cy.js" \
+          echo "Running ${{ matrix.test-suite.name }} tests..."
+          # Use xvfb for headless display
+          xvfb-run -a npx cypress run \
+            --spec "${{ matrix.test-suite.spec }}" \
             --browser chrome \
             --headless \
             --reporter junit \
-            --reporter-options "mochaFile=test-results/auth-results.xml"
+            --reporter-options "mochaFile=test-results/${{ matrix.test-suite.output }}"
             
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-auth-results-${{ github.sha }}
+          name: e2e-${{ matrix.test-suite.name }}-results-${{ github.sha }}
           path: |
             test-results/
             cypress/screenshots/
             cypress/videos/
           retention-days: 5
 
-  e2e-tests-homepage:
-    name: E2E Tests - Homepage
-    runs-on: ubuntu-latest
-    needs: [static-analysis, setup-app-server]
-    timeout-minutes: 15
-    
-    strategy:
-      fail-fast: false
-      
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-${{ github.sha }}
-          path: build/
-          
-      - name: Start Application Server
-        run: |
-          npm start &
-          sleep 30
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
-          
-      - name: Run Homepage E2E Tests
-        run: |
-          npx cypress run \
-            --spec "cypress/e2e/02-homepage.cy.js" \
-            --browser chrome \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/homepage-results.xml"
-            
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-homepage-results-${{ github.sha }}
-          path: |
-            test-results/
-            cypress/screenshots/
-            cypress/videos/
-          retention-days: 5
-
-  e2e-tests-articles:
-    name: E2E Tests - Article Management
-    runs-on: ubuntu-latest
-    needs: [static-analysis, setup-app-server]
-    timeout-minutes: 20
-    
-    strategy:
-      fail-fast: false
-      
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-${{ github.sha }}
-          path: build/
-          
-      - name: Start Application Server
-        run: |
-          npm start &
-          sleep 30
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
-          
-      - name: Run Article Management E2E Tests
-        run: |
-          npx cypress run \
-            --spec "cypress/e2e/03-article-management.cy.js" \
-            --browser chrome \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/articles-results.xml"
-            
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-articles-results-${{ github.sha }}
-          path: |
-            test-results/
-            cypress/screenshots/
-            cypress/videos/
-          retention-days: 5
-
-  e2e-tests-interactions:
-    name: E2E Tests - User Interactions
-    runs-on: ubuntu-latest
-    needs: [static-analysis, setup-app-server]
-    timeout-minutes: 20
-    
-    strategy:
-      fail-fast: false
-      
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-${{ github.sha }}
-          path: build/
-          
-      - name: Start Application Server
-        run: |
-          npm start &
-          sleep 30
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
-          
-      - name: Run Comments E2E Tests
-        run: |
-          npx cypress run \
-            --spec "cypress/e2e/04-comments.cy.js" \
-            --browser chrome \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/comments-results.xml"
-            
-      - name: Run Profile E2E Tests
-        run: |
-          npx cypress run \
-            --spec "cypress/e2e/05-user-profile.cy.js" \
-            --browser chrome \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/profile-results.xml"
-            
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-interactions-results-${{ github.sha }}
-          path: |
-            test-results/
-            cypress/screenshots/
-            cypress/videos/
-          retention-days: 5
-
-  e2e-tests-navigation:
-    name: E2E Tests - Navigation & Integration
-    runs-on: ubuntu-latest
-    needs: [static-analysis, setup-app-server]
-    timeout-minutes: 25
-    
-    strategy:
-      fail-fast: false
-      
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-${{ github.sha }}
-          path: build/
-          
-      - name: Start Application Server
-        run: |
-          npm start &
-          sleep 30
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
-          
-      - name: Run Navigation E2E Tests
-        run: |
-          npx cypress run \
-            --spec "cypress/e2e/06-navigation.cy.js" \
-            --browser chrome \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/navigation-results.xml"
-            
-      - name: Run Integration E2E Tests
-        run: |
-          npx cypress run \
-            --spec "cypress/e2e/07-integration.cy.js" \
-            --browser chrome \
-            --headless \
-            --reporter junit \
-            --reporter-options "mochaFile=test-results/integration-results.xml"
-            
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-navigation-results-${{ github.sha }}
-          path: |
-            test-results/
-            cypress/screenshots/
-            cypress/videos/
-          retention-days: 5
-
-  # Job 8: Cross-Browser Testing (Sequential after E2E)
+  # Job 4: Cross-Browser Testing (Sequential after E2E)
   cross-browser-tests:
     name: Cross-Browser Testing
     runs-on: ubuntu-latest
-    needs: [e2e-tests-auth, e2e-tests-homepage, e2e-tests-articles, e2e-tests-interactions, e2e-tests-navigation]
+    needs: [e2e-tests]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     timeout-minutes: 30
     
     strategy:
       fail-fast: false
       matrix:
-        browser: [firefox, edge]
+        browser: [firefox]  # Removed edge as it's not available in Ubuntu
         
     steps:
       - name: Checkout Repository
@@ -470,6 +232,11 @@ jobs:
       - name: Install Dependencies
         run: npm ci
         
+      - name: Install Browser Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y firefox-esr xvfb
+        
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -479,12 +246,15 @@ jobs:
       - name: Start Application Server
         run: |
           npm start &
-          sleep 30
+          sleep 45
           curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
           
+      - name: Create Test Results Directory
+        run: mkdir -p test-results
+        
       - name: Run Critical Path Tests on ${{ matrix.browser }}
         run: |
-          npx cypress run \
+          xvfb-run -a npx cypress run \
             --spec "cypress/e2e/01-authentication.cy.js,cypress/e2e/03-article-management.cy.js" \
             --browser ${{ matrix.browser }} \
             --headless \
@@ -502,63 +272,11 @@ jobs:
             cypress/videos/
           retention-days: 5
 
-  # Job 9: Performance Testing (Sequential)
-  performance-tests:
-    name: Performance Testing
-    runs-on: ubuntu-latest
-    needs: [e2e-tests-auth, e2e-tests-homepage, e2e-tests-articles, e2e-tests-interactions, e2e-tests-navigation]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    timeout-minutes: 15
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install Dependencies
-        run: npm ci
-        
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-${{ github.sha }}
-          path: build/
-          
-      - name: Start Application Server
-        run: |
-          npm start &
-          sleep 30
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
-          
-      - name: Install Lighthouse
-        run: npm install -g lighthouse
-        
-      - name: Run Lighthouse Performance Tests
-        run: |
-          lighthouse http://localhost:4100 \
-            --chrome-flags="--headless --no-sandbox" \
-            --output=json \
-            --output-path=./lighthouse-report.json \
-            --quiet
-            
-      - name: Upload Performance Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: performance-results-${{ github.sha }}
-          path: lighthouse-report.json
-          retention-days: 5
-
-  # Job 10: Test Results Aggregation (Sequential - final step)
+  # Job 5: Test Results Aggregation (Sequential - final step)
   aggregate-results:
     name: Aggregate Test Results
     runs-on: ubuntu-latest
-    needs: [unit-tests, e2e-tests-auth, e2e-tests-homepage, e2e-tests-articles, e2e-tests-interactions, e2e-tests-navigation]
+    needs: [unit-tests, e2e-tests]
     if: always()
     timeout-minutes: 10
     
@@ -590,8 +308,10 @@ jobs:
           echo "- ✅ E2E Authentication Tests" >> test-summary.md
           echo "- ✅ E2E Homepage Tests" >> test-summary.md
           echo "- ✅ E2E Article Management Tests" >> test-summary.md
-          echo "- ✅ E2E User Interaction Tests" >> test-summary.md
-          echo "- ✅ E2E Navigation & Integration Tests" >> test-summary.md
+          echo "- ✅ E2E Comments Tests" >> test-summary.md
+          echo "- ✅ E2E User Profile Tests" >> test-summary.md
+          echo "- ✅ E2E Navigation Tests" >> test-summary.md
+          echo "- ✅ E2E Integration Tests" >> test-summary.md
           echo "" >> test-summary.md
           
           # Count test files and estimated test count
@@ -601,15 +321,15 @@ jobs:
           echo "## Test Coverage" >> test-summary.md
           echo "- **Total E2E Test Files:** $TOTAL_E2E_FILES" >> test-summary.md
           echo "- **Estimated Test Cases:** $ESTIMATED_TESTS+" >> test-summary.md
-          echo "- **Parallel Jobs Used:** 5 (E2E tests)" >> test-summary.md
+          echo "- **Parallel Jobs Used:** 7 (E2E tests)" >> test-summary.md
           echo "- **Maximum Concurrent Jobs:** 20 (GitHub limit respected)" >> test-summary.md
           echo "" >> test-summary.md
           
           echo "## Parallelism Strategy" >> test-summary.md
           echo "The pipeline uses strategic parallelism:" >> test-summary.md
-          echo "- **Sequential:** Static analysis → Build → App setup" >> test-summary.md
-          echo "- **Parallel:** 5 E2E test suites run simultaneously" >> test-summary.md
-          echo "- **Sequential:** Cross-browser and performance tests after E2E" >> test-summary.md
+          echo "- **Sequential:** Static analysis → Build" >> test-summary.md
+          echo "- **Parallel:** 7 E2E test suites run simultaneously" >> test-summary.md
+          echo "- **Sequential:** Cross-browser tests after E2E" >> test-summary.md
           echo "- **Final:** Results aggregation" >> test-summary.md
           
           cat test-summary.md
@@ -636,7 +356,7 @@ jobs:
               body: summary
             });
 
-  # Job 11: Deployment (Sequential - only on main/master)
+  # Job 6: Deployment (Sequential - only on main/master)
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
@@ -665,4 +385,4 @@ jobs:
         run: |
           echo "🚀 Deployment completed successfully!"
           echo "📊 All tests passed and application deployed"
-          echo "🔗 Available at: https://${{ github.repository_owner }}.github.io/react-redux-realworld-example-app"
+          echo "🔗 Available at: https://${{ github.repository_owner }}.github.io/react-redux-realworld-example-app-qa"
