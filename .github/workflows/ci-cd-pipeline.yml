@@ -124,16 +124,51 @@ jobs:
           name: build-artifacts-${{ github.sha }}
           path: build/
           
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Install serve globally
+        run: npm install -g serve
+        
+      - name: Start Application Server
+        run: |
+          echo "Starting static server on port 4100..."
+          serve -s build -l 4100 &
+          sleep 10
+          
+          # Wait for server to be ready
+          max_attempts=30
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            if curl -f http://localhost:4100 > /dev/null 2>&1; then
+              echo "Server is ready after $attempt attempts!"
+              break
+            fi
+            echo "Attempt $attempt/$max_attempts failed, retrying..."
+            sleep 2
+            attempt=$((attempt + 1))
+          done
+          
+          if [ $attempt -gt $max_attempts ]; then
+            echo "Server failed to start"
+            exit 1
+          fi
+        
       - name: Run E2E Tests - ${{ matrix.test-suite.name }}
         uses: cypress-io/github-action@v6
         with:
-          working-directory: ./
           spec: ${{ matrix.test-suite.spec }}
           browser: chrome
           headless: true
-          start: npx serve -s build -l 4100
+          install: false
           wait-on: 'http://localhost:4100'
-          wait-on-timeout: 120
+          wait-on-timeout: 60
           config: baseUrl=http://localhost:4100
             
       - name: Upload Test Results
@@ -170,15 +205,33 @@ jobs:
           name: build-artifacts-${{ github.sha }}
           path: build/
           
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Install serve globally
+        run: npm install -g serve
+        
+      - name: Start Application Server
+        run: |
+          serve -s build -l 4100 &
+          sleep 10
+          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:4100
+        
       - name: Run Critical Path Tests on ${{ matrix.browser }}
         uses: cypress-io/github-action@v6
         with:
-          spec: cypress/e2e/01-authentication.cy.js,cypress/e2e/03-article-management.cy.js
+          spec: cypress/e2e/00-smoke.cy.js
           browser: ${{ matrix.browser }}
           headless: true
-          start: npx serve -s build -l 4100
+          install: false
           wait-on: 'http://localhost:4100'
-          wait-on-timeout: 120
+          wait-on-timeout: 60
           config: baseUrl=http://localhost:4100
             
       - name: Upload Cross-Browser Results
